@@ -75,6 +75,7 @@ void str_cli(FILE *fp, int sockfd){
                 else
                     perror("str_cli: server terminated prematurely");
             }
+
             write(fileno(stdout), buf, n);
         }
 

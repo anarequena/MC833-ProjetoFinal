@@ -1,6 +1,6 @@
 CFLAGS = -Wall -g
 
-LIB_CODE = socket_helper.c 
+LIB_CODE = socket_helper.c
 LIB_HEADER = socket_helper.h
 
 all: cliente servidor #cliente servidor
@@ -12,10 +12,10 @@ all: cliente servidor #cliente servidor
 #	gcc $(CFLAGS) servidor.c $(LIB_CODE) -o servidor
 
 cliente: cliente.c $(LIB_CODE) $(LIB_HEADER)
-	gcc $(CFLAGS) cliente.c $(LIB_CODE) -o cliente
+	gcc $(CFLAGS) cliente.c $(LIB_CODE) -o cliente -g
 
 servidor: servidor.c $(LIB_CODE) $(LIB_HEADER)
-	gcc $(CFLAGS) servidor.c $(LIB_CODE) -o servidor
+	gcc $(CFLAGS) servidor.c $(LIB_CODE) -o servidor -g
 
 .PHONY: clean
 clean:

@@ -16,19 +16,21 @@
 #define MAXDATASIZE 4096
 #define MAXWORDSIZE 50
 #define WELCOME_MESSAGE "Bem vindo ao jogo da forca!\n-----\n1) Iniciar partida simples\n2) Ser carrasco ao iniciar partida\n3) jogar no modo multiplayer\n"
+#define BEGIN_GAME "A partida de jogo da forca comecou!\n-----\n"
 
 enum role {carrasco = 0, jogador = 1};
 
-char **createDic();
-void doit(int connfd, struct sockaddr_in clientaddr);
+char **createDic(int *nwords);
+void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary, int nwords);
 
 int main (int argc, char **argv) {
     int listenfd,
         connfd,
-        port;
+        port,
+        zero = 0;
     struct sockaddr_in servaddr;
     char   error[MAXDATASIZE + 1];
-
+    int *nwords = &zero;
 
     enum   role type = carrasco;
     char   **dictionary;
@@ -43,10 +45,11 @@ int main (int argc, char **argv) {
 
     /* uma array de string contendo todas as palavras, do arquivo auxiliar, para
      o jogo */
-    if((dictionary = createDic()) == NULL) {
+    if((dictionary = createDic(nwords)) == NULL) {
         strcpy(error, "Dicionário inválido");
         exit(1);
     }
+
 
     port = atoi(argv[1]);
 
@@ -70,7 +73,7 @@ int main (int argc, char **argv) {
         if((pid = fork()) == 0) {
             Close(listenfd);
 
-            doit(connfd, clientaddr);
+            doit(connfd, clientaddr, dictionary, (*nwords));
 
             Close(connfd);
 
@@ -87,20 +90,21 @@ int main (int argc, char **argv) {
 char **createDic(int *nwords){
     FILE *fp = fopen("dicionario.txt", "r");
     char **dictionary;
-    char *aux;
+    char aux[MAXDATASIZE];
 
     if(fp == NULL)
         return NULL;
 
-    while(fscanf(fp, "%c", &aux) != EOF)
+    while(fscanf(fp, "%s ", aux) != EOF){
         (*nwords)++;
+    }
 
     rewind(fp);
-    dictionary = malloc(n_words * sizeof(char *));
+    dictionary = malloc((*nwords) * sizeof(char *));
 
-    for(int i = 0; i < n_words; i++) {
-        dictionary[i] = malloc(MAXWORDSIZE * sizeof(char))
-        fscanf(fp, "%c", &dictionary[i]);
+    for(int i = 0; i < (*nwords); i++) {
+        dictionary[i] = malloc(MAXWORDSIZE * sizeof(char));
+        fscanf(fp, "%s", dictionary[i]);
     }
 
     fclose(fp);
@@ -111,7 +115,9 @@ char **createDic(int *nwords){
 void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
           int nwords) {
 
-    char recvline[MAXDATASIZE + 1];
+    char recvline[MAXDATASIZE + 1],
+        lostmessage[MAXDATASIZE],
+        beginmessage[MAXDATASIZE];
     int n;
     socklen_t remoteaddr_len = sizeof(clientaddr);
     int ncwins = 0;
@@ -120,7 +126,9 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
     int statewords[nwords];
     int chosenindex;
     char chosenword[MAXWORDSIZE];
-    int lifes;
+    char aux[MAXWORDSIZE];
+    int lifes = 6;
+    int win = 0;
 
     /*  array que indica 0 se a palavra no dicionario nao foi usada ainda com esse
       jogador e 1 se o contrario */
@@ -130,31 +138,54 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
     /*  enviando o menu */
     write(connfd, WELCOME_MESSAGE, strlen(WELCOME_MESSAGE));
 
-    read(connfd, recvline, MAXDATASIZE);
-
-    if(recvline[0] == '1') {
-
-        if(ingame == 0){
-            /*  escolhendo uma palavra aleatoriamente */
-            srand(time(0));
-            while((chosenindex = rand() % nwords) && (statewords[chosenindex] != 0));
-            strcpy(chosenword, dictionary[chosenindex]);
-            statewords[chosenindex] = 1;
-            ingame = 1;
-        }
-    }
-    //write("");
 
     while ((n = read(connfd, recvline, MAXDATASIZE)) > 0) {
         recvline[n] = 0;
 
-        if(recvline == "1")
+        if(recvline[0] == '1') {
+            if(ingame == 0){
+                /*  escolhendo uma palavra aleatoriamente */
+                srand(time(NULL));
+                while((chosenindex = rand() % nwords) && (statewords[chosenindex] != 0));
+                strcpy(chosenword, dictionary[chosenindex]);
+                statewords[chosenindex] = 1;
+                printf("%d %s\n", chosenindex, chosenword);
+                ingame = 1;
+                for(int i = 0; i < strlen(chosenword); i++){
+                    aux[i*2] = '_';
+                    aux[i*2 + 1] = ' ';
+                }
+                write(connfd, BEGIN_GAME, strlen(BEGIN_GAME));
+                int len = sprintf(beginmessage, "Você possui %d vidas.\nA palavra possui %ld caracteres\n", lifes, strlen(chosenword));
+                write(connfd, beginmessage, len);
+                write(connfd, aux, 2*strlen(chosenword));
+            }
+        }
+
+        if(ingame == 1){
+            win = 0;
+            for(int i = 0; i < strlen(chosenword); i++){
+                if(recvline[0] == chosenword[i]){
+                    aux[i*2] = chosenword[i];
+                    write(connfd, aux, 2*strlen(chosenword));
+                    win = 1;
+                }
+            }
+            if(win == 0){
+                if(lifes == 0){
+                    int len = sprintf(lostmessage, "A palavra correta era %s, você perdeu!", chosenword);
+                    write(connfd, lostmessage, len);
+                } else{
+                    lifes -= 1;
+                }
+            }
+        }
 
         if (getpeername(connfd, (struct sockaddr *) &clientaddr, &remoteaddr_len) == -1) {
             perror("getpeername() failed");
             return;
         }
-        write(connfd, recvline, strlen(recvline));
+
     }
-  
+
 }
