@@ -16,7 +16,7 @@
 #define LISTENQ 10
 #define MAXDATASIZE 4096
 #define MAXWORDSIZE 50
-#define WELCOME_MESSAGE "Bem vindo ao jogo da forca!\n-----\n1) Iniciar partida simples\n2) Ser carrasco ao iniciar partida\n3) jogar no modo multiplayer\n"
+#define WELCOME_MESSAGE "Bem vindo ao jogo da forca!\n-----\n1) Iniciar partida simples\n2) Ser carrasco ao iniciar partida\n3) Jogar no modo multiplayer\n"
 #define BEGIN_GAME "A partida de jogo da forca comecou!\n-----\n"
 #define PLAY_AGAIN "Deseja jogar outra partida, digite \"SIM\"\n"
 #define WIN_MESSAGE "Você adivinhou a palavra!\n"
@@ -35,8 +35,6 @@ int main (int argc, char **argv) {
     struct sockaddr_in servaddr;
     char   error[MAXDATASIZE + 1];
     int *nwords = &zero;
-
-    enum   role type = carrasco;
     char   **dictionary;
 
     if (argc != 2) {
@@ -118,12 +116,12 @@ char **createDic(int *nwords){
 
 void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
           int nwords) {
-
+    //enum   role type;
     char recvline[MAXDATASIZE + 1],
         lostmessage[MAXDATASIZE],
         beginmessage[MAXDATASIZE],
         trymessage[MAXDATASIZE];
-    int n;
+    int n, i, alphabet[25];
     socklen_t remoteaddr_len = sizeof(clientaddr);
     int ncwins = 0, ncgames = 0, ingame = 0;
     int statewords[nwords];
@@ -131,9 +129,8 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
     char chosenword[MAXWORDSIZE],
         aux[MAXWORDSIZE],
         word[MAXWORDSIZE],
-        alphabet[123],
         letter;
-    int lifes = 6, win = 0, begin = 0;
+    int lifes = 6, win = 0, begin = 0, correct_chars = 0;
 
     /*  array que indica 0 se a palavra no dicionario nao foi usada ainda com esse
       jogador e 1 se o contrario */
@@ -148,8 +145,10 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
         recvline[n] = 0;
 
         if((ingame == 2)&&(!(strcmp(recvline, "SIM\n")))){
-            doit(connfd, clientaddr, dictionary, nwords);
-            return;
+            write(connfd, WELCOME_MESSAGE, strlen(WELCOME_MESSAGE));
+            ingame=0;
+            correct_chars=0;
+            memset(alphabet, 0, 25*sizeof(int));
         } else if(ingame == 2){
             write(connfd, "exit", 5);
         }
@@ -157,6 +156,7 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
         /* single player */
         if(recvline[0] == '1') {
             if(ingame == 0){
+                ncgames += 1;
                 /*  escolhendo uma palavra aleatoriamente */
                 srand(time(NULL));
                 while((chosenindex = rand() % nwords) && (statewords[chosenindex] != 0));
@@ -165,10 +165,11 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
                 ingame = 1;
 
                 /* display do numero de letras da palavra */
-                for(int i = 0; i < strlen(chosenword); i++){
+                for(i = 0; i < strlen(chosenword); i++){
                     aux[i*2] = '_';
                     aux[i*2 + 1] = ' ';
                 }
+                aux[i*2] = '\0';
                 sprintf(word, "%s\n", aux);
 
                 /* começa a partida */
@@ -182,11 +183,6 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
             }
         }
 
-        /* carrasco */
-        if(recvline[0] == '2') {
-
-        }
-
         if(ingame == 1){
             /* verifica se o caracter eh uma letra ou nao */
             letter = toupper(recvline[0]);
@@ -198,7 +194,7 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
                 // flag de letra acertada
                 win = 0;
 
-                if(alphabet[letter]==1){
+                if(alphabet[letter-65]==1){
                     int len = sprintf(trymessage, "A letra '%c' ja foi utilizada\n", letter);
                     write(connfd, trymessage, len);
                     write(connfd, word, 2*strlen(chosenword)+1);
@@ -207,16 +203,21 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
                     for(int i = 0; i < strlen(chosenword); i++){
                         if(letter == chosenword[i]){
                             word[i*2] = chosenword[i];
-                            alphabet[letter] = 1;
+                            alphabet[letter-65] = 1;
                             win = 1;
-                            ncwins += 1;
+                            correct_chars += 1;
                         }
                     }
 
-                    if(ncwins == strlen(chosenword)){
+                    if(correct_chars == strlen(chosenword)){
                         write(connfd, WIN_MESSAGE, strlen(WIN_MESSAGE));
-                        write(connfd, PLAY_AGAIN, strlen(PLAY_AGAIN));
                         ingame = 2;
+                        ncwins += 1;
+
+                        int len = sprintf(beginmessage, "Você venceu %d jogos dos %d disputados.\n", ncwins, ncgames);
+                        write(connfd, beginmessage, len);
+
+                        write(connfd, PLAY_AGAIN, strlen(PLAY_AGAIN));
                     }
 
                     if(win == 1){
@@ -225,11 +226,15 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
                         if(lifes == 1){
                             int len = sprintf(lostmessage, "A palavra correta era %s, você perdeu!\n", chosenword);
                             write(connfd, lostmessage, len);
+
+                            len = sprintf(beginmessage, "Você venceu %d jogos dos %d disputados.\n", ncwins, ncgames);
+                            write(connfd, beginmessage, len);
+
                             write(connfd, PLAY_AGAIN, strlen(PLAY_AGAIN));
                             ingame = 2;
                         } else {
                             lifes -= 1;
-                            alphabet[letter] = 1;
+                            alphabet[letter-65] = 1;
                             int len = sprintf(trymessage, "A palavra não tem nenhuma letra '%c'.\nVocê agora possui %d vidas.\n", letter, lifes);
                             write(connfd, trymessage, len);
                             write(connfd, word, 2*strlen(chosenword)+1);
