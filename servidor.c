@@ -82,9 +82,9 @@ int main (int argc, char **argv) {
             Close(connfd);
 
             exit(0);
-        } else {
+        } /*else {
             waitpid(-1, NULL, 0);
-        }
+        }*/
         Close(connfd);
     }
 
@@ -154,6 +154,7 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
             write(connfd, "exit", 5);
         }
 
+        /* single player */
         if(recvline[0] == '1') {
             if(ingame == 0){
                 /*  escolhendo uma palavra aleatoriamente */
@@ -161,7 +162,6 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
                 while((chosenindex = rand() % nwords) && (statewords[chosenindex] != 0));
                 strcpy(chosenword, dictionary[chosenindex]);
                 statewords[chosenindex] = 1;
-                printf("%d %s\n", chosenindex, chosenword);
                 ingame = 1;
 
                 /* display do numero de letras da palavra */
@@ -180,6 +180,11 @@ void doit(int connfd, struct sockaddr_in clientaddr, char **dictionary,
                 // flag de inicio de jogo
                 begin = 1;
             }
+        }
+
+        /* carrasco */
+        if(recvline[0] == '2') {
+
         }
 
         if(ingame == 1){
