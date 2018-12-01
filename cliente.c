@@ -72,12 +72,17 @@ void str_cli(FILE *fp, int sockfd){
             if((n = read(sockfd, buf, MAXLINE)) == 0){
                 if(stdineof == 1)
                     return;
-                else
+                else {
                     perror("str_cli: server terminated prematurely");
+                }
             }
 
+            if(!(strcmp(buf, "exit"))){
+                return;
+            }
             write(fileno(stdout), buf, n);
         }
+
 
         if(FD_ISSET(fileno(fp), &rset)){
             if((n=read(fileno(fp), buf, MAXLINE)) == 0){
